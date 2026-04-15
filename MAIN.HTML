@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fundamentos de Redes: Aplicação e Transporte</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Academic Emerald & Slate -->
+    <!-- Application Structure Plan: SPA dashboard dividida em 4 seções temáticas (Fundamentos, Protocolos Web, TCP vs UDP, e Sockets). Esta estrutura abandona a linearidade dos slides originais para agrupar conceitos logicamente: primeiro o 'o quê' (Fundamentos), depois o 'como' no nível da web (HTTP/DNS), descendo para o 'transporte' (TCP/UDP) e finalmente a 'implementação' (Sockets). A navegação via abas laterais/superiores permite acesso rápido. A interatividade foca em revelação progressiva e simulação (ex: fluxo de sockets) para fixação de aprendizagem. -->
+    <!-- Visualization & Content Choices: 
+         1. Evolução (Goal: Timeline/Change) -> HTML/Tailwind Timeline -> Scroll/Read -> Mostra a progressão temporal das aplicações.
+         2. TCP vs UDP (Goal: Compare) -> Radar Chart (Chart.js) -> Hover para detalhes -> Compara visualmente atributos abstratos (Velocidade, Confiabilidade) sem usar SVG.
+         3. Requisitos de Aplicação (Goal: Relationships) -> Scatter Plot (Chart.js) -> Hover -> Mostra correlação entre sensibilidade a atraso e taxa de dados.
+         4. Hierarquia DNS (Goal: Organize/Hierarchy) -> HTML Nested Lists com JS Toggle -> Click para expandir -> Demonstra busca recursiva/iterativa sem diagramas SVG.
+         5. Fluxo de Sockets (Goal: Process Flow) -> HTML Stepper com JS -> Click 'Próximo' -> Simula a ordem de execução do código cliente/servidor. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 400px;
+        }
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 300px;
+                max-height: 300px;
+            }
+        }
+        .dns-node { cursor: pointer; transition: all 0.2s; }
+        .dns-node:hover { background-color: #f1f5f9; }
+        body { background-color: #f8fafc; }
+    </style>
+</head>
+<body class="text-slate-800 font-sans antialiased flex flex-col min-h-screen">
+
+    <nav class="bg-emerald-700 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🌐</span>
+                    <span class="font-bold text-xl tracking-tight">Redes de Computadores IFCE</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <button data-target="sec-fundamentos" class="nav-btn bg-emerald-900 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Visão Geral</button>
+                        <button data-target="sec-web" class="nav-btn hover:bg-emerald-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Web & Nomes</button>
+                        <button data-target="sec-transporte" class="nav-btn hover:bg-emerald-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">TCP vs UDP</button>
+                        <button data-target="sec-sockets" class="nav-btn hover:bg-emerald-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Sockets</button>
+                    </div>
+                </div>
+                <div class="md:hidden flex items-center">
+                    <select id="mobile-nav" class="bg-emerald-800 text-white border-none rounded-md py-2 px-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                        <option value="sec-fundamentos">Visão Geral</option>
+                        <option value="sec-web">Web & Nomes</option>
+                        <option value="sec-transporte">TCP vs UDP</option>
+                        <option value="sec-sockets">Sockets</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+
+        <section id="sec-fundamentos" class="content-section animate-fade-in block">
+            <div class="mb-8 border-b border-slate-200 pb-5">
+                <h1 class="text-3xl font-extrabold text-slate-900">Camada de Aplicação: A Porta de Entrada da Internet</h1>
+                <p class="mt-4 text-lg text-slate-600 leading-relaxed">
+                    Bem-vindo à exploração da Camada de Aplicação. Esta seção apresenta por que as aplicações de rede são a razão de ser da Internet. Aqui, você entenderá como o software reside nos sistemas finais e como as duas principais arquiteturas (Cliente-Servidor e P2P) organizam a comunicação global. Navegue pela linha do tempo para ver o impacto histórico.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <h2 class="text-xl font-bold text-emerald-700 mb-4 flex items-center gap-2"><span>🏛️</span> Arquiteturas de Rede</h2>
+                    <div class="space-y-6">
+                        <div class="p-4 rounded-lg bg-slate-50 border-l-4 border-emerald-500">
+                            <h3 class="font-bold text-lg mb-2">Cliente-Servidor</h3>
+                            <p class="text-sm text-slate-600 mb-3">Servidor sempre ativo com IP fixo. Clientes iniciam a comunicação. Fácil de gerenciar, mas com gargalo centralizado e custos de infraestrutura elevados.</p>
+                            <div class="flex gap-2 text-xs font-mono">
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded">Web (HTTP)</span>
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded">E-mail (SMTP)</span>
+                            </div>
+                        </div>
+                        <div class="p-4 rounded-lg bg-slate-50 border-l-4 border-blue-500">
+                            <h3 class="font-bold text-lg mb-2">Peer-to-Peer (P2P)</h3>
+                            <p class="text-sm text-slate-600 mb-3">Sem servidor central. Comunicação direta entre pares. Altamente escalável (cada peer adiciona capacidade) e robusto contra falhas, mas complexo de proteger e gerenciar.</p>
+                            <div class="flex gap-2 text-xs font-mono">
+                                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">BitTorrent</span>
+                                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">Blockchain</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <h2 class="text-xl font-bold text-emerald-700 mb-4 flex items-center gap-2"><span>⏳</span> Evolução das Aplicações</h2>
+                    <div class="relative border-l border-slate-200 ml-3">
+                        <div class="mb-6 ml-6 relative">
+                            <span class="absolute -left-8 flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 ring-4 ring-white"><span class="h-2 w-2 rounded-full bg-emerald-600"></span></span>
+                            <h3 class="text-sm font-bold text-slate-800">1970 - 1980</h3>
+                            <p class="text-sm text-slate-600">E-mail, Telnet, FTP. Impacto: Comunicação acadêmica e pesquisa.</p>
+                        </div>
+                        <div class="mb-6 ml-6 relative">
+                            <span class="absolute -left-8 flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 ring-4 ring-white"><span class="h-2 w-2 rounded-full bg-emerald-600"></span></span>
+                            <h3 class="text-sm font-bold text-slate-800">1990 - 2000</h3>
+                            <p class="text-sm text-slate-600">Web (HTTP), Comércio Eletrônico. Impacto: Democratização da informação.</p>
+                        </div>
+                        <div class="mb-6 ml-6 relative">
+                            <span class="absolute -left-8 flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 ring-4 ring-white"><span class="h-2 w-2 rounded-full bg-emerald-600"></span></span>
+                            <h3 class="text-sm font-bold text-slate-800">2000 - 2010</h3>
+                            <p class="text-sm text-slate-600">VoIP (Skype), Streaming. Impacto: Convergência de mídia digital.</p>
+                        </div>
+                        <div class="ml-6 relative">
+                            <span class="absolute -left-8 flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 ring-4 ring-white"><span class="h-2 w-2 rounded-full bg-emerald-600"></span></span>
+                            <h3 class="text-sm font-bold text-slate-800">2020+</h3>
+                            <p class="text-sm text-slate-600">IA, IoT, Metaverso. Impacto: Próxima fronteira digital hiperconectada.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-emerald-50 rounded-xl p-6 border border-emerald-100 text-center">
+                <h3 class="text-emerald-800 font-bold text-lg mb-2">Processos e Endereçamento</h3>
+                <p class="text-slate-700 max-w-3xl mx-auto">
+                    A comunicação não ocorre entre máquinas, mas entre <strong>Processos</strong>. Para um processo encontrar outro na rede, ele precisa de um identificador único: o <strong>Endereço IP</strong> (localiza o hospedeiro) e o <strong>Número da Porta</strong> (localiza o processo/socket).
+                </p>
+                <div class="mt-4 inline-block bg-white px-4 py-2 rounded shadow-sm font-mono text-sm border border-slate-200 text-slate-800">
+                    ID Completo = (Endereço IP : Número da Porta) <br> Ex: 200.18.15.10 : 80
+                </div>
+            </div>
+        </section>
+
+        <section id="sec-web" class="content-section hidden animate-fade-in">
+            <div class="mb-8 border-b border-slate-200 pb-5">
+                <h1 class="text-3xl font-extrabold text-slate-900">O "Idioma" da Web e a Resolução de Nomes</h1>
+                <p class="mt-4 text-lg text-slate-600 leading-relaxed">
+                    Nesta seção, exploramos como o HTTP gerencia o estado da navegação, apesar de ser um protocolo "stateless", e como o DNS (Domain Name System) funciona como o catálogo telefônico da Internet. Interaja com a árvore DNS abaixo para compreender a estrutura hierárquica e distribuída de resolução de nomes.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <h2 class="text-xl font-bold text-emerald-700 mb-4 flex items-center gap-2"><span>🍪</span> HTTP e Manutenção de Estado</h2>
+                    <p class="text-sm text-slate-600 mb-4">O HTTP é <strong>stateless</strong> (sem estado). O servidor esquece o cliente após a requisição. Para resolver isso e permitir logins e carrinhos de compra, utilizamos <strong>Cookies</strong> e conexões persistentes.</p>
+                    
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+                            <span class="text-sm font-bold text-slate-700">HTTP Não-Persistente (HTTP/1.0)</span>
+                            <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-mono">1 Objeto = 1 Conexão TCP</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+                            <span class="text-sm font-bold text-slate-700">HTTP Persistente (HTTP/1.1+)</span>
+                            <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-mono">Múltiplos Objetos = 1 Conexão</span>
+                        </div>
+                        <div class="p-4 bg-yellow-50 rounded border border-yellow-200 mt-2">
+                            <h4 class="text-sm font-bold text-yellow-800 mb-1">Como funcionam os Cookies?</h4>
+                            <ol class="text-xs text-yellow-900 list-decimal pl-4 space-y-1">
+                                <li>Cliente envia requisição inicial.</li>
+                                <li>Servidor responde e inclui cabeçalho <code>Set-cookie: ID=1234</code>.</li>
+                                <li>Cliente salva o Cookie.</li>
+                                <li>Nas próximas requisições, cliente inclui <code>Cookie: ID=1234</code>.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <h2 class="text-xl font-bold text-emerald-700 mb-4 flex items-center gap-2"><span>📖</span> DNS Hierárquico Interativo</h2>
+                    <p class="text-sm text-slate-600 mb-4">Clique nos servidores abaixo para simular uma <strong>consulta iterativa</strong>. Humanos usam nomes, máquinas usam IPs. O DNS faz essa tradução navegando em uma árvore distribuída globalmente.</p>
+                    
+                    <div class="bg-slate-800 rounded-lg p-4 font-mono text-sm text-slate-300">
+                        <div class="text-center mb-4 text-white font-bold pb-2 border-b border-slate-600">
+                            Objetivo: Encontrar IP de "www.ifce.edu.br"
+                        </div>
+                        <div class="space-y-2">
+                            <div class="dns-node bg-slate-700 p-2 rounded flex justify-between items-center" onclick="toggleDns('tld-node')">
+                                <span>[+] Servidor Raiz (Root)</span>
+                                <span class="text-xs text-slate-400">Conhece os servidores TLD</span>
+                            </div>
+                            <div id="tld-node" class="hidden pl-6 space-y-2 border-l border-slate-600 ml-3 mt-2">
+                                <div class="dns-node bg-slate-700 p-2 rounded flex justify-between items-center" onclick="toggleDns('auth-node')">
+                                    <span>[+] Servidor TLD (.br)</span>
+                                    <span class="text-xs text-slate-400">Gerencia domínios de topo</span>
+                                </div>
+                                <div id="auth-node" class="hidden pl-6 space-y-2 border-l border-slate-600 ml-3 mt-2">
+                                    <div class="bg-emerald-900 text-white p-2 rounded flex justify-between items-center border border-emerald-500">
+                                        <span>[✓] Servidor Autoritativo (IFCE)</span>
+                                        <span class="text-xs font-bold text-emerald-300">IP: 200.18.15.10</span>
+                                    </div>
+                                    <p class="text-xs text-emerald-400 mt-2 italic">A resposta é devolvida ao cliente, que agora pode iniciar a conexão TCP via socket!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="sec-transporte" class="content-section hidden animate-fade-in">
+            <div class="mb-8 border-b border-slate-200 pb-5">
+                <h1 class="text-3xl font-extrabold text-slate-900">Serviços da Camada de Transporte: TCP vs UDP</h1>
+                <p class="mt-4 text-lg text-slate-600 leading-relaxed">
+                    A escolha do protocolo de transporte dita o comportamento da sua aplicação. Avalie interativamente as quatro dimensões essenciais: Transferência Confiável, Vazão, Temporização e Segurança. Observe os gráficos para entender visualmente os trade-offs entre o burocrático e seguro TCP contra o veloz e leve UDP.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
+                    <h2 class="text-xl font-bold text-slate-800 mb-2 w-full">Perfil de Desempenho: TCP x UDP</h2>
+                    <p class="text-xs text-slate-500 mb-4 w-full">Gráfico de radar demonstrando o foco de cada protocolo. TCP foca em controle e segurança na entrega, UDP foca em velocidade bruta.</p>
+                    <div class="chart-container">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
+                    <h2 class="text-xl font-bold text-slate-800 mb-2 w-full">Requisitos por Tipo de Aplicação</h2>
+                    <p class="text-xs text-slate-500 mb-4 w-full">Relação entre a exigência de Vazão (Banda) e a Sensibilidade ao Tempo (Latência) de diferentes casos de uso.</p>
+                    <div class="chart-container">
+                        <canvas id="scatterChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="p-6 bg-slate-50 border-b border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-800">Tabela de Decisão do Desenvolvedor</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 text-slate-600">
+                            <tr>
+                                <th class="p-4 border-b">Característica</th>
+                                <th class="p-4 border-b font-bold text-emerald-700">TCP (Transmission Control Protocol)</th>
+                                <th class="p-4 border-b font-bold text-blue-700">UDP (User Datagram Protocol)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-700">
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 border-b font-medium">Conexão & Confiabilidade</td>
+                                <td class="p-4 border-b text-emerald-800 bg-emerald-50/30">Orientado à conexão (Handshake) / 100% Confiável</td>
+                                <td class="p-4 border-b text-blue-800 bg-blue-50/30">Sem conexão / "Melhor esforço" (Não confiável)</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 border-b font-medium">Ordem de Entrega</td>
+                                <td class="p-4 border-b">Garantida e em ordem</td>
+                                <td class="p-4 border-b">Fora de ordem possível</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 border-b font-medium">Controles (Fluxo/Congestionamento)</td>
+                                <td class="p-4 border-b text-emerald-800 bg-emerald-50/30">Sim (Janela deslizante / AIMD)</td>
+                                <td class="p-4 border-b text-blue-800 bg-blue-50/30">Não possui. Envia o mais rápido possível.</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 border-b font-medium">Overhead (Tamanho do Cabeçalho)</td>
+                                <td class="p-4 border-b">Alto (20 a 60 bytes)</td>
+                                <td class="p-4 border-b text-blue-800 font-bold">Baixo (8 bytes)</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 border-b font-medium">Aplicações Típicas</td>
+                                <td class="p-4 border-b">Web (HTTP), E-mail (SMTP), FTP, SSH</td>
+                                <td class="p-4 border-b">Streaming ao vivo, DNS, VoIP (Skype), Jogos online</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="sec-sockets" class="content-section hidden animate-fade-in">
+            <div class="mb-8 border-b border-slate-200 pb-5">
+                <h1 class="text-3xl font-extrabold text-slate-900">Programação de Sockets na Prática</h1>
+                <p class="mt-4 text-lg text-slate-600 leading-relaxed">
+                    Sockets formam a base técnica (a interface de programação ou API) que conecta sua aplicação à rede. Abaixo, simule interativamente o ciclo de vida e a ordem exata das funções chamadas na criação de um Servidor e Cliente TCP utilizando a biblioteca padrão (como Python).
+                </p>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 max-w-4xl mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-emerald-700">Simulador de Chamadas: Arquitetura Cliente-Servidor TCP</h2>
+                    <button id="reset-socket-btn" class="text-sm px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition">Reiniciar Fluxo</button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-8 text-center text-sm font-mono relative">
+                    
+                    <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-200 -ml-px border-dashed border-l-2"></div>
+
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-800 mb-6 bg-slate-100 py-2 rounded">Processo Servidor</h3>
+                        <div id="srv-step-1" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all">1. socket() <br><span class="text-xs text-slate-500 font-sans">Cria o endpoint</span></div>
+                        <div id="srv-step-2" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all">2. bind() <br><span class="text-xs text-slate-500 font-sans">Associa IP e Porta (ex: 12000)</span></div>
+                        <div id="srv-step-3" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all">3. listen() <br><span class="text-xs text-slate-500 font-sans">Abre para ouvir conexões</span></div>
+                        <div id="srv-step-4" class="socket-step opacity-30 bg-emerald-50 border-2 border-emerald-300 p-3 rounded mb-16 transition-all shadow-sm ring-2 ring-emerald-500 ring-offset-2 scale-105">4. accept() <br><span class="text-xs text-emerald-700 font-sans font-bold">Bloqueia e aguarda cliente...</span></div>
+                        <div id="srv-step-6" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all">6. recv() / send() <br><span class="text-xs text-slate-500 font-sans">Troca de dados bidirecional</span></div>
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-800 mb-6 bg-slate-100 py-2 rounded">Processo Cliente</h3>
+                        <div class="h-[188px]"></div> 
+                        <div id="cli-step-1" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all">1. socket() <br><span class="text-xs text-slate-500 font-sans">Cria o endpoint do cliente</span></div>
+                        <div id="cli-step-2" class="socket-step opacity-30 bg-blue-50 border-2 border-blue-300 p-3 rounded mb-4 transition-all text-blue-900">2. connect() <br><span class="text-xs text-blue-700 font-sans">Inicia Three-way Handshake</span></div>
+                        <div id="cli-step-3" class="socket-step opacity-30 bg-slate-50 border-2 border-slate-200 p-3 rounded mb-4 transition-all mt-16">3. send() / recv() <br><span class="text-xs text-slate-500 font-sans">Envia requisição / Lê resposta</span></div>
+                        <div id="cli-step-4" class="socket-step opacity-30 bg-red-50 border-2 border-red-200 p-3 rounded transition-all text-red-900">4. close() <br><span class="text-xs text-red-600 font-sans">Encerra a conexão</span></div>
+                    </div>
+                </div>
+
+                <div class="mt-10 flex flex-col items-center">
+                    <button id="next-socket-step" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                        Executar Próximo Passo
+                    </button>
+                    <p id="socket-desc" class="mt-4 text-center text-slate-600 font-medium h-12 flex items-center">O Servidor está aguardando (listen) na porta configurada.</p>
+                </div>
+            </div>
+            
+            <div class="mt-8 bg-slate-800 text-slate-300 p-6 rounded-xl font-mono text-sm max-w-4xl mx-auto border-l-4 border-emerald-500 shadow-sm">
+                <p class="text-emerald-400 font-bold mb-2">💡 Curiosidade Técnica: Concorrência</p>
+                <p>Para um servidor atender múltiplos clientes simultaneamente (como um servidor Web), não basta um loop simples. O processo principal aceita a conexão no `accept()` e cria uma nova <strong>Thread</strong> ou Processo filho para tratar o `recv/send` daquele cliente específico, liberando o processo principal para aceitar novas conexões na porta original.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 py-6 text-center text-sm mt-auto">
+        <p>Desenvolvido para fins educacionais baseado no material "Redes de Computadores: Teoria, Prática e Pesquisa".</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- Navigation Logic ---
+            const navBtns = document.querySelectorAll('.nav-btn');
+            const sections = document.querySelectorAll('.content-section');
+            const mobileNav = document.getElementById('mobile-nav');
+
+            function switchTab(targetId) {
+                sections.forEach(sec => sec.classList.add('hidden'));
+                document.getElementById(targetId).classList.remove('hidden');
+                
+                navBtns.forEach(btn => {
+                    if(btn.dataset.target === targetId) {
+                        btn.classList.add('bg-emerald-900');
+                        btn.classList.remove('hover:bg-emerald-600');
+                    } else {
+                        btn.classList.remove('bg-emerald-900');
+                        btn.classList.add('hover:bg-emerald-600');
+                    }
+                });
+                if(mobileNav.value !== targetId) mobileNav.value = targetId;
+            }
+
+            navBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => switchTab(e.target.dataset.target));
+            });
+
+            mobileNav.addEventListener('change', (e) => switchTab(e.target.value));
+
+            // --- DNS Interactive Logic ---
+            window.toggleDns = function(id) {
+                const el = document.getElementById(id);
+                if (el.classList.contains('hidden')) {
+                    el.classList.remove('hidden');
+                    el.classList.add('block');
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('block');
+                }
+            };
+
+            // --- Chart.js Implementations ---
+            Chart.defaults.font.family = "'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif";
+            Chart.defaults.color = '#64748b';
+
+            // Radar Chart (TCP vs UDP)
+            const ctxRadar = document.getElementById('radarChart').getContext('2d');
+            new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: [
+                        ['Confiabilidade', '(Sem perdas)'], 
+                        ['Velocidade', '(Baixa latência)'], 
+                        ['Leveza', '(Baixo Overhead)'], 
+                        ['Controle', '(Fluxo/Congestionamento)'], 
+                        ['Ordenação', '(Entrega em ordem)']
+                    ],
+                    datasets: [{
+                        label: 'TCP',
+                        data: [100, 40, 20, 100, 100],
+                        fill: true,
+                        backgroundColor: 'rgba(5, 150, 105, 0.2)', // emerald-600
+                        borderColor: 'rgb(5, 150, 105)',
+                        pointBackgroundColor: 'rgb(5, 150, 105)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(5, 150, 105)'
+                    }, {
+                        label: 'UDP',
+                        data: [20, 100, 100, 0, 20],
+                        fill: true,
+                        backgroundColor: 'rgba(37, 99, 235, 0.2)', // blue-600
+                        borderColor: 'rgb(37, 99, 235)',
+                        pointBackgroundColor: 'rgb(37, 99, 235)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(37, 99, 235)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(0,0,0,0.1)' },
+                            grid: { color: 'rgba(0,0,0,0.1)' },
+                            pointLabels: { font: { size: 11, weight: 'bold' } },
+                            ticks: { display: false, max: 100, min: 0 }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.r > 80) label += 'Muito Alto';
+                                    else if (context.parsed.r > 50) label += 'Moderado';
+                                    else if (context.parsed.r > 0) label += 'Baixo';
+                                    else label += 'Inexistente';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Scatter Chart (App Requirements)
+            const ctxScatter = document.getElementById('scatterChart').getContext('2d');
+            new Chart(ctxScatter, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'E-mail / FTP', data: [{x: 10, y: 10}], backgroundColor: '#64748b', pointRadius: 8, pointHoverRadius: 10 },
+                        { label: 'Web (HTTP)', data: [{x: 30, y: 20}], backgroundColor: '#0f172a', pointRadius: 8, pointHoverRadius: 10 },
+                        { label: 'Streaming de Vídeo', data: [{x: 90, y: 40}], backgroundColor: '#ef4444', pointRadius: 8, pointHoverRadius: 10 },
+                        { label: 'Jogos Online', data: [{x: 20, y: 95}], backgroundColor: '#8b5cf6', pointRadius: 8, pointHoverRadius: 10 },
+                        { label: 'VoIP (Skype)', data: [{x: 40, y: 90}], backgroundColor: '#3b82f6', pointRadius: 8, pointHoverRadius: 10 },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Exigência de Vazão (Banda)', font: {weight: 'bold'} },
+                            min: 0, max: 100,
+                            ticks: { callback: function(val) { return val === 0 ? 'Elástica' : val === 100 ? 'Alta (Mbps)' : ''; } }
+                        },
+                        y: {
+                            title: { display: true, text: 'Sensibilidade a Atraso (Latência)', font: {weight: 'bold'} },
+                            min: 0, max: 100,
+                            ticks: { callback: function(val) { return val === 0 ? 'Baixa (Tolerante)' : val === 100 ? 'Alta (<100ms)' : ''; } }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return context.dataset.label; }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // --- Socket Stepper Logic ---
+            let socketStep = 0;
+            const socketBtn = document.getElementById('next-socket-step');
+            const resetBtn = document.getElementById('reset-socket-btn');
+            const descEl = document.getElementById('socket-desc');
+            
+            const stepsConfig = [
+                { id: 'srv-step-1', desc: "Servidor: Inicializa o socket do sistema operacional." },
+                { id: 'srv-step-2', desc: "Servidor: Liga o socket a um IP e Porta local (bind)." },
+                { id: 'srv-step-3', desc: "Servidor: Entra em modo de escuta. A 'porta' está aberta." },
+                { id: 'srv-step-4', desc: "Servidor: Chama accept() e DORMITA (bloqueia) até alguém chegar.", highlight: true },
+                { id: 'cli-step-1', desc: "Cliente: Usuário abre o App. Cliente inicializa seu próprio socket." },
+                { id: 'cli-step-2', desc: "Cliente: Solicita conexão ao IP/Porta do servidor. Handshake TCP ocorre aqui na rede!", highlight: true },
+                { id: 'srv-step-4', desc: "Servidor: accept() acorda! Uma nova conexão dedicada é estabelecida com o cliente.", resolve: true },
+                { id: 'cli-step-3', desc: "Cliente: Envia dados (ex: GET HTTP) e aguarda resposta." },
+                { id: 'srv-step-6', desc: "Servidor: Recebe o pedido, processa e envia a resposta de volta (send)." },
+                { id: 'cli-step-4', desc: "Cliente: Termina de receber e fecha a conexão do lado dele." }
+            ];
+
+            function applyStepStyle(elId, state) {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                el.classList.remove('opacity-30', 'ring-2', 'ring-emerald-500', 'ring-offset-2', 'scale-105', 'bg-emerald-100', 'border-emerald-500');
+                
+                if (state === 'active') {
+                    el.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2', 'scale-105');
+                    el.classList.remove('opacity-30');
+                } else if (state === 'done') {
+                    el.classList.remove('opacity-30');
+                    el.classList.add('bg-emerald-50', 'border-emerald-300'); // Done state
+                } else {
+                    el.classList.add('opacity-30');
+                }
+            }
+
+            function updateSocketSimulation() {
+                if (socketStep >= stepsConfig.length) {
+                    descEl.textContent = "Ciclo completo. A conexão foi encerrada. Clique em 'Reiniciar Fluxo'.";
+                    socketBtn.disabled = true;
+                    socketBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    return;
+                }
+
+                const currentConfig = stepsConfig[socketStep];
+                descEl.textContent = currentConfig.desc;
+
+                // Reset all to past state if they are before current step
+                document.querySelectorAll('.socket-step').forEach(el => applyStepStyle(el.id, 'inactive'));
+                
+                for(let i=0; i <= socketStep; i++) {
+                     let isCurrent = (i === socketStep);
+                     let config = stepsConfig[i];
+                     
+                     if(isCurrent) {
+                         applyStepStyle(config.id, 'active');
+                     } else {
+                         applyStepStyle(config.id, 'done');
+                     }
+                }
+                
+                // Special handling for the blocking accept visual
+                if(socketStep < 3) {
+                     document.getElementById('srv-step-4').classList.add('opacity-30');
+                }
+
+                socketStep++;
+            }
+
+            socketBtn.addEventListener('click', updateSocketSimulation);
+            
+            resetBtn.addEventListener('click', () => {
+                socketStep = 0;
+                socketBtn.disabled = false;
+                socketBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                descEl.textContent = "O Servidor está iniciando...";
+                document.querySelectorAll('.socket-step').forEach(el => applyStepStyle(el.id, 'inactive'));
+                // keep the accept pulse state logic initially
+                document.getElementById('srv-step-4').classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2', 'scale-105');
+            });
+
+        });
+    </script>
+</body>
+</html>
